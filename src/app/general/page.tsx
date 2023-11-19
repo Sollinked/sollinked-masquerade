@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { cloneObj, getGeneralPubKey, getRPCEndpoint, getTransactions, getTx, sendSOLWithMemo } from '../../common/utils';
 import { useSollinked } from '@sollinked/sdk';
 import useAutosizeTextArea from '@/hooks/useAutosizeTextArea';
-import { HomepageUser } from 'sdk/dist/src/Account/types';
+import { HomepageUser } from './types';
 import Image from 'next/image';
 import logo from '../../../public/logo.png';
 import moment from 'moment';
