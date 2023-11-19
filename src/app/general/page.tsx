@@ -137,6 +137,7 @@ const Page = () => {
 
         txIds.current = [...txIds.current, ...newSignatures];
         let txs = await connection.getParsedTransactions(newSignatures, "confirmed");
+        let newAddresses: string[] = addresses;
         
         txs.forEach(async(tx, i) => {
             if(!tx || !tx.blockTime) {
@@ -172,14 +173,14 @@ const Page = () => {
 
             messages.current = newMessages;
             setToggler(!toggler);
-            if(!addresses.includes(address)) {
-                setAddresses([...addresses, address]);
+            if(!newAddresses.includes(address)) {
+                newAddresses.push(address);
+                setAddresses(cloneObj(newAddresses));
             }
         });
     }, [ connection, toggler, addresses ])
 
     const sendMessage = useCallback(async() => {
-        console.log('sending message')
         let sendText = text.trim();
         if(!sendText) {
             return;
@@ -216,6 +217,7 @@ const Page = () => {
     }, [ getData ]);
 
     useEffect(() => {
+
         if(!account) {
             return;
         }
@@ -236,7 +238,7 @@ const Page = () => {
                 }
                 newUsers[address] = user;
                 queriedAddresses.push(address);
-                setUsers(newUsers);
+                setUsers(cloneObj(newUsers));
             });
         }
 
