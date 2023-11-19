@@ -61,7 +61,7 @@ const Page = () => {
         let shouldDisplayDetails = previousAddress !== address;
 
         return (
-            <div className='flex flex-row'>
+            <div className={`flex flex-row ${shouldDisplayDetails? 'mt-5' : ''}`}>
                 {
                     shouldDisplayDetails?
                     <a href={user? `https://app.sollinked.com/${user.username}` : "#"} target='_blank' rel="noopener noreferer">
@@ -144,13 +144,22 @@ const Page = () => {
             }
 
             // only 2 transactions
-            if(tx.transaction.message.instructions.length !== 2) {
-                return;
+            let address = "";
+            let memo = "";
+
+            switch(tx.transaction.message.instructions.length) {
+                case 2:
+                    address = (tx.transaction.message.instructions[0] as ParsedInstruction).parsed.info.source;
+                    memo = (tx.transaction.message.instructions[1] as ParsedInstruction).parsed;
+                    break;
+                case 4:
+                    address = (tx.transaction.message.instructions[2] as ParsedInstruction).parsed.info.source;
+                    memo = (tx.transaction.message.instructions[3] as ParsedInstruction).parsed;
+                    break;
+                default:
+                    break;
             }
 
-            let address = (tx.transaction.message.instructions[0] as ParsedInstruction).parsed.info.source;
-            let memo = (tx.transaction.message.instructions[1] as ParsedInstruction).parsed;
-            
             if(!memo) {
                 return;
             }
