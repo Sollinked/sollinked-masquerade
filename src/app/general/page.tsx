@@ -61,7 +61,7 @@ const Page = () => {
         let shouldDisplayDetails = previousAddress !== address;
 
         return (
-            <div className={`flex flex-row ${shouldDisplayDetails? 'mt-5' : ''}`}>
+            <div className={`flex flex-row ${shouldDisplayDetails? 'mt-3' : ''}`}>
                 {
                     shouldDisplayDetails?
                     <a href={user? `https://app.sollinked.com/${user.username}` : "#"} target='_blank' rel="noopener noreferer">
@@ -248,7 +248,7 @@ const Page = () => {
     return (
         <div 
 			className={`
-				flex flex-col p-3
+				flex flex-col p-3 pt-0
 				dark:bg-slate-700 bg-white rounded
 				dark:text-slate-300 text-black
 				md:text-xs lg:text-base
