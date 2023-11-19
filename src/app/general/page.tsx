@@ -1,13 +1,15 @@
 'use client';
 import { ChangeEvent, useCallback, useMemo, useEffect, useState, useRef } from 'react';
 import { toast } from 'react-toastify';
-import { cloneObj } from '../../common/utils';
+import { cloneObj, getGeneralPubKey, getRPCEndpoint, getTransactions, getTx, sendSOLWithMemo } from '../../common/utils';
 import { useSollinked } from '@sollinked/sdk';
 import useAutosizeTextArea from '@/hooks/useAutosizeTextArea';
 import { HomepageUser } from 'sdk/dist/src/Account/types';
 import Image from 'next/image';
 import logo from '../../../public/logo.png';
 import moment from 'moment';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, ParsedInstruction, PublicKey } from '@solana/web3.js';
 
 type Message = { 
     message: string; 
@@ -17,11 +19,23 @@ type Message = {
 
 const Page = () => {
     const { user, account } = useSollinked();
+    const wallet = useWallet();
     const [text, setText] = useState("");
-    const [messages, setMessages] = useState<Message[]>([]);
     const [users, setUsers] = useState<{ [address: string]: HomepageUser }>({});
+    const [addresses, setAddresses] = useState<string[]>([]);
+    const [toggler, setToggler] = useState(false);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const prevMessageLength = useRef(0);
+    const messages = useRef<Message[]>([]);
+    const txIds = useRef<string[]>([]);
+    const hasInterval = useRef<boolean>(false);
+    const connection = useMemo(() => {
+        // load the env variables and store the cluster RPC url
+        const CLUSTER_URL = getRPCEndpoint();
+
+        // create a new rpc connection, using the ReadApi wrapper
+        return new Connection(CLUSTER_URL, "confirmed");
+    }, []);
   
     useAutosizeTextArea(textAreaRef.current, text);
 
@@ -50,17 +64,19 @@ const Page = () => {
             <div className='flex flex-row'>
                 {
                     shouldDisplayDetails?
-                    <div className='mr-3'>
-                        <Image
-                            src={user?.profile_picture? user.profile_picture : logo}
-                            alt="null"
-                            width={30}
-                            height={30}
-                            className={`
-                                h-10 w-10 rounded-full dark:border-none border-2 border-black bg-slate-700
-                            `}
-                        />
-                    </div> :
+                    <a href={user? `https://app.sollinked.com/${user.username}` : "#"} target='_blank' rel="noopener noreferer">
+                        <div className='mr-3'>
+                            <Image
+                                src={user?.profile_picture? user.profile_picture : logo}
+                                alt="null"
+                                width={30}
+                                height={30}
+                                className={`
+                                    h-10 w-10 rounded-full dark:border-none border-2 border-black bg-slate-700
+                                `}
+                            />
+                        </div>
+                    </a> :
                     <div className='mr-3'>
                         <div className='w-10'></div>
                     </div>
@@ -69,10 +85,17 @@ const Page = () => {
                     {
                         shouldDisplayDetails &&
                         <>
-                            <div className="flex flex-row items-end">
-                                <span className='text-sm text-white'>{displayName}</span>
-                                <span className='ml-3 text-xs'>{displayDate}</span>
-                            </div>
+                            {
+                                user?
+                                <a href={`https://app.sollinked.com/${user.username}`} target='_blank' rel="noopener noreferer" className="flex flex-row items-end">
+                                    <span className='text-sm text-white'>{displayName}</span>
+                                    <span className='ml-3 text-xs'>{displayDate}</span>
+                                </a> :
+                                <div className="flex flex-row items-end">
+                                    <span className='text-sm text-white'>{displayName}</span>
+                                    <span className='ml-3 text-xs'>{displayDate}</span>
+                                </div> 
+                            }
                             {
                                 user?.tags?
                                 <div className="mt-1 mb-2">
@@ -101,166 +124,94 @@ const Page = () => {
         );
     }, [ users ]);
 
+    const getData = useCallback(async() => {
+        let newMessages = cloneObj(messages.current);
+        let newTxIds = cloneObj(txIds.current);
+        let transactionList = await getTransactions(getGeneralPubKey(), 100);
+
+        let signatures = transactionList.reverse().map(x => x.signature);
+        let newSignatures = signatures.filter(x => !newTxIds.includes(x));
+        if(newSignatures.length === 0) {
+            return;
+        }
+
+        txIds.current = [...txIds.current, ...newSignatures];
+        let txs = await connection.getParsedTransactions(newSignatures, "confirmed");
+        
+        txs.forEach(async(tx, i) => {
+            if(!tx || !tx.blockTime) {
+                return;
+            }
+
+            // only 2 transactions
+            if(tx.transaction.message.instructions.length !== 2) {
+                return;
+            }
+
+            let address = (tx.transaction.message.instructions[0] as ParsedInstruction).parsed.info.source;
+            let memo = (tx.transaction.message.instructions[1] as ParsedInstruction).parsed;
+            
+            if(!memo) {
+                return;
+            }
+
+            newMessages.push({
+                block_timestamp: tx.blockTime * 1000,
+                message: memo,
+                address
+            });
+
+            messages.current = newMessages;
+            setToggler(!toggler);
+            if(!addresses.includes(address)) {
+                setAddresses([...addresses, address]);
+            }
+        });
+    }, [ connection, toggler, addresses ])
+
+    const sendMessage = useCallback(async() => {
+        console.log('sending message')
+        let sendText = text.trim();
+        if(!sendText) {
+            return;
+        }
+
+        if(!wallet || !wallet.publicKey) {
+            toast.error("Unable to get wallet");
+            return;
+        }
+
+        try {
+            await sendSOLWithMemo(wallet, wallet.publicKey, new PublicKey(getGeneralPubKey()), sendText);
+            setText("");
+            getData();
+            toast.success('Message sent');
+        }
+
+        catch {
+            toast.error("Unable to send message, please try again");
+            return;
+        }
+    }, [ wallet, text, getData ]);
+
     useEffect(() => {
-        setTimeout(() => {
-            setMessages([
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700374615000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700375614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-                {
-                    block_timestamp: 1700376614000,
-                    message: 'hihi',
-                    address: 'BFVoLdTw1hd6Ly9KTAPWYie9NeFcbce5evKFRQqpgxvm',
-                },
-        ]);
-        }, 5000);
-    }, []);
+        if(hasInterval.current) {
+            return;
+        }
+
+        hasInterval.current = true;
+
+        setInterval(() => {
+            getData();
+        }, 1000);
+    }, [ getData ]);
 
     useEffect(() => {
         if(!account) {
             return;
         }
 
-        if(messages.length === prevMessageLength.current) {
-            return;
-        } 
-
-        prevMessageLength.current = messages.length;
-
         const getUserData = async() => {
-            let addresses = messages.map(x => x.address);
             let knownAddresses = Object.keys(users);
             let queriedAddresses: string[] = [];
             let unknownAddresses = addresses.filter(x => !knownAddresses.includes(x));
@@ -281,7 +232,7 @@ const Page = () => {
         }
 
         getUserData();
-    }, [ messages, users, account ]);
+    }, [ addresses, users, account ]);
 
     return (
         <div 
@@ -295,11 +246,11 @@ const Page = () => {
 		>
             <div className='h-full overflow-y-auto'>
                 {
-                    messages.map((x, index) => (
+                    messages.current.map((x, index) => (
                         <ChatMessage
                             key={`message-${index}`}
                             message={x}
-                            previousAddress={index === 0? "" : messages[index - 1].address}
+                            previousAddress={index === 0? "" : messages.current[index - 1].address}
                         />
                     ))
                 }
@@ -330,6 +281,7 @@ const Page = () => {
                             border-none
                         `}
                         disabled={!user.address}
+                        onClick={sendMessage}
                     >
                         { user.address? 'Send' : 'Login To Send' }
                     </button>

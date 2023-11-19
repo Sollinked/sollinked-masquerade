@@ -1,10 +1,9 @@
 import { SignerWalletAdapterProps, WalletNotConnectedError, WalletNotReadyError } from '@solana/wallet-adapter-base';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { createAssociatedTokenAccountInstruction, createTransferInstruction, getAccount, getAssociatedTokenAddress } from '@solana/spl-token';
-import { Connection, GetProgramAccountsFilter, Keypair, PublicKey, Transaction, TransactionInstruction, VersionedTransaction, clusterApiUrl } from '@solana/web3.js';
+import { Connection, GetProgramAccountsFilter, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction, clusterApiUrl } from '@solana/web3.js';
 import moment, { Moment } from 'moment';
 import { md5 } from 'js-md5';
-import BigNumber from 'bignumber.js';
 
 export function sleep(ms: number) {
     return new Promise((resolve, reject) => {
@@ -413,10 +412,77 @@ export const swapAndSendTo = async(wallet: WalletContextState, mintToken: Public
       return signature;
 }
 
-export const getContentPaymentAddress = () => {
-    return process.env.NEXT_PUBLIC_PAYMENT_CONTENT_TO!;
+export const sendSOLWithMemo = async(wallet: WalletContextState, fromPubkey: PublicKey, toPubkey: PublicKey, memo: string) => { 
+    // load the env variables and store the cluster RPC url
+    const CLUSTER_URL = getRPCEndpoint();
+
+    // create a new rpc connection, using the ReadApi wrapper
+    const connection = new Connection(CLUSTER_URL, "confirmed");
+
+    let transaction = new Transaction().add(
+        SystemProgram.transfer({
+            fromPubkey,
+            toPubkey,
+            // send 0.00001 lamports per message
+            lamports: Math.round(0.000001 * LAMPORTS_PER_SOL),
+        }),
+
+        // send the memo
+        new TransactionInstruction({
+            keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: true }],
+            data: Buffer.from(memo, "utf-8"),
+            programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+        }),
+    );
+
+    // Send and confirm transaction
+    // Note: feePayer is by default the first signer, or payer, if the parameter is not set
+    const blockHash = await connection.getLatestBlockhash('confirmed');
+    let signature = await wallet.sendTransaction(transaction, connection);
+
+    await connection.confirmTransaction({
+        blockhash: blockHash.blockhash,
+        lastValidBlockHeight: blockHash.lastValidBlockHeight,
+        signature,
+    });
+
+    return signature;
 }
 
+
+export const getTransactions = async(address: string, numTx: number) => {
+    // load the env variables and store the cluster RPC url
+    const CLUSTER_URL = getRPCEndpoint();
+
+    // create a new rpc connection, using the ReadApi wrapper
+    const connection = new Connection(CLUSTER_URL, "confirmed");
+
+    const pubKey = new PublicKey(address);
+    let transactionList = await connection.getSignaturesForAddress(pubKey, {limit:numTx});
+    return transactionList;
+}
+
+export const getTx = async(txId: string) => {
+    // load the env variables and store the cluster RPC url
+    const CLUSTER_URL = getRPCEndpoint();
+
+    // create a new rpc connection, using the ReadApi wrapper
+    const connection = new Connection(CLUSTER_URL, "confirmed");
+    let tx = await connection.getTransaction(txId, { maxSupportedTransactionVersion: 0 });
+
+    if(tx === null) {
+        return undefined;
+    }
+    console.log(tx);
+    console.log(tx.meta?.loadedAddresses?.readonly)
+    console.log(tx.meta?.loadedAddresses?.writable)
+    return tx;
+}
+
+// 
+export const getGeneralPubKey = () => {
+    return process.env.NEXT_PUBLIC_GENERAL_PUBKEY!;
+}
 // api key
 export const getApiKey = () => {
     return process.env.NEXT_PUBLIC_API_KEY!;
