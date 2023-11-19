@@ -16,7 +16,7 @@
     "@solana/wallet-adapter-react-ui": "^0.9.34",
     "@solana/wallet-adapter-wallets": "^0.19.23",
     "@solana/web3.js": "^1.87.6",
-    "@sollinked/sdk": "^1.2.3",
+    "@sollinked/sdk": "^1.2.4",
     "antd": "^5.11.2",
     "bignumber.js": "^9.1.2",
     "js-md5": "^0.8.3",
