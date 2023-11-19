@@ -69,7 +69,7 @@ const Wrapped = ({
                     <div className={`
                         md:px-5 md:pb-5 pt-3 px-1 
                         md:pb-3 pb-[70px]
-                        ${isHeaderHidden? '' : 'pt-[100px]'}
+                        ${isHeaderHidden? '' : 'pt-[80px]'}
                         `}>
                         {children}
                     </div>

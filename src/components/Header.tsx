@@ -1,11 +1,17 @@
 'use client';
 import { VERIFY_MESSAGE } from '@/common/constants';
-import { BarsOutlined, SearchOutlined } from '@ant-design/icons';
+import { BarsOutlined } from '@ant-design/icons';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useSollinked } from '@sollinked/sdk';
+import BigNumber from 'bignumber.js';
 import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { getMd5, getRPCEndpoint } from '@/common/utils';
+import Image from 'next/image';
+import logo from '../../public/logo.png';
 
 type HeaderParams = {
     onMenuClick: () => void;
@@ -22,14 +28,13 @@ const hideInPaths = [
 ];
 
 const hidePathPattern = [
-    /\/github\/\d+/g,
-    /\/.*\/contentPass/g,
     /\/.*\/content/g,
 ];
 
 const Header = ({onMenuClick, onHeaderVisibilityChange}: HeaderParams) => {
     const wallet = useWallet();
-    const { user, init } = useSollinked();
+    const { user, init, account, calendar, mail } = useSollinked();
+    const [isUpdatingTags, setIsUpdatingTags] = useState(false);
     const pathname = usePathname();
     const shouldHide = useMemo(() => {
         if(hideInPaths.includes(pathname)) {
@@ -43,6 +48,10 @@ const Header = ({onMenuClick, onHeaderVisibilityChange}: HeaderParams) => {
         }
         return false;
     }, [ pathname ]);
+
+    const connection = useMemo(() => {
+      return new Connection(getRPCEndpoint());
+    }, []);
 
     useEffect(() => {
         onHeaderVisibilityChange(shouldHide && user.id > 0);
@@ -93,33 +102,93 @@ const Header = ({onMenuClick, onHeaderVisibilityChange}: HeaderParams) => {
         askForSignature();
     }, [user, init, wallet]);
 
+	// user tags
+	const onRefreshUserTag = useCallback(async() => {
+        if(!account) {
+            return;
+        }
+
+		if(!user.address) {
+            toast.error('Please connect your wallet');
+            return;
+		}
+
+		try {        
+            await account.me();
+
+			setTimeout(() => {
+				toast.success("Refreshed");
+				// getData();
+				setIsUpdatingTags(false);
+			}, 300);
+		}
+
+        catch(e: any) {
+            setTimeout(() => {
+                toast.error("Error saving data");
+                setIsUpdatingTags(false);
+            }, 300);
+            return;
+        }
+	}, [ account, user ]);
+
     return (
       <div className={`
         ${shouldHide && user.id > 0? 'hidden' : ''}
-        justify-between md:justify-end
-        flex flex-row px-3 items-center 
+        ${user.address? 'justify-between' : 'justify-end' }
+        flex flex-row px-5 items-center 
         h-[60px]
         fixed top-2 ${shouldHide? '' : 'left-0 '} md:right-3 right-1
         z-[11]
       `}>
-        {/** menu button */}
-        <button
-            className={`
-                ${shouldHide? 'hidden' : ''}
-                flex md:hidden
-                flex-row items-center
-                rounded border-slate-500 border-[1px]
-                dark:bg-slate-700 bg-indigo-300
-                px-3 py-2
-            `}
-            onClick={onMenuClick}
-        >
-            <BarsOutlined 
-                style={{
-                    fontSize: 20
-                }}
-            />
-        </button>
+        {
+            user.address &&
+            <div className="flex flex-row items-center">
+                <Image
+                    src={user.profile_picture? user.profile_picture : logo}
+                    alt="null"
+                    width={30}
+                    height={30}
+                    className={`
+                        h-10 w-10 rounded-full dark:border-none border-2 border-black bg-slate-700
+                    `}
+                />
+                <div className='ml-3 mr-3'>{user.display_name ?? `${user.username}@sollinked.com`}</div>
+                <button
+                    className={`
+                        mr-3 my-auto border-[1px]
+                        h-7 w-7 text-[20px]
+                        rounded
+                        flex items-center justify-center
+                        dark:text-white text-white bg-green-500
+                        border-none
+                    `}
+                    onClick={onRefreshUserTag}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" 
+                        className={`w-4 h-4 ${isUpdatingTags? 'animate-spin' : ''}`}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                </button>
+                <a
+                    className={`
+                        mr-3 my-auto border-[1px]
+                        px-3 h-7
+                        text-[20px]
+                        rounded
+                        flex items-center justify-center
+                        dark:text-white text-white bg-green-500 text-xs
+                        border-none
+                    `}
+                    href="https://app.sollinked.com/settings"
+                    target="_blank"
+                    rel="noopener noreferer"
+                >
+                    Edit Profile
+                </a>
+            </div>
+        }
         <div className='dark:bg-slate-700 rounded border-slate-500 border-[1px] shadow'>
             <WalletMultiButtonDynamic />
         </div>

@@ -11,12 +11,12 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://sollinked.com"),
-  title: 'Sollinked | Earn on Solana',
-  description: 'Earning from contents have never been easier.',
-  keywords: "sollinked, solana, solana social media, social media, solana linkedin",
+  title: 'Masquerade | Chat for anons',
+  description: 'Chat anonymously while revealing your holdings using zk proofs.',
+  keywords: "sollinked, solana, solana social media, solana chat",
   openGraph: {
-    title: "Sollinked",
-    description: "Earning from contents have never been easier.",
+    title: "Masquerade",
+    description: "Chat for anons.",
     images: [
         {
           url: '/logo.png',
@@ -26,13 +26,13 @@ export const metadata: Metadata = {
           type: 'image/jpeg',
         },
     ],
-    siteName: "Sollinked | Earn on Solana",
-    url: "https://app.sollinked.com",
+    siteName: "Masquerade | Chat for anons",
+    url: "https://masquerade.sollinked.com",
     type: "website",
   },
   twitter: {
     site: '@Sollinked_com',
-    title: "Sollinked | Earn on Solana",
+    title: "Masquerade | Chat for anons",
     creator: "@darksoulsfanlol",
     description: "Earning from contents have never been easier.",
     images: [
@@ -57,11 +57,9 @@ export default function RootLayout({
       <Head>
         <link
           rel="canonical"
-          href="https://sollinked.com"
+          href="https://masquerade.sollinked.com"
           key="canonical"
         />
-        <link rel="alternate" href="https://www.sollinked.com"/>
-        <link rel="alternate" href="https://app.sollinked.com"/>
       </Head>
       <body className={`
         ${inter.className} 
