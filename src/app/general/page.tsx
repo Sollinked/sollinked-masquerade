@@ -170,7 +170,7 @@ const Page = () => {
                 message: memo,
                 address
             });
-
+            newMessages = newMessages.sort((a,b) => a.block_timestamp > b.block_timestamp? 1 : -1);
             messages.current = newMessages;
             setToggler(!toggler);
             if(!newAddresses.includes(address)) {
